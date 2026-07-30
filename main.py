@@ -18,13 +18,15 @@ GEMINI_WS_URL = f"wss://generativelanguage.googleapis.com/ws/google.ai.generativ
 async def inicio():
     return HTMLResponse("🚀 Servidor de Voz Activo (Twilio + Gemini)")
 
+# 2. La "recepcionista" con URL fija y XML simplificado
 @app.post("/llamada")
 @app.get("/llamada")
-async def contestar_llamada(request: Request):
-    host = request.url.hostname
-    twiml = f'Conectando con inteligencia artificial.'
-    return Response(content=twiml, media_type="application/xml")
+async def contestar_llamada():
+    # Iniciamos directo con  para evitar errores en navegadores
+    twiml = 'Conectando con inteligencia artificial.'
+    return Response(content=twiml, media_type="text/xml")
 
+# 3. El túnel de WebSockets para el audio
 @app.websocket("/ws")
 async def websocket_endpoint(twilio_ws: WebSocket):
     await twilio_ws.accept()
@@ -34,19 +36,19 @@ async def websocket_endpoint(twilio_ws: WebSocket):
     async with websockets.connect(GEMINI_WS_URL) as gemini_ws:
         print("🧠 Conectado a Gemini.")
         
-        # 1. Configuración de personalidad y voz
+        # Configuración de personalidad y voz
         setup_msg = {
             "setup": {
                 "model": "models/gemini-2.0-flash-exp",
                 "systemInstruction": {
-                    "parts": [{"text": "Eres un asistente telefónico amable. Responde siempre en español, de forma muy concisa, como en una charla telefónica real. No uses formatos de texto."}]
+                    "parts": [{"text": "Eres un asistente telefónico amable. Responde siempre en español, de forma muy concisa, como en una charla telefónica real."}]
                 },
                 "generationConfig": {
                     "responseModalities": ["AUDIO"],
                     "speechConfig": {
                         "voiceConfig": {
                             "prebuiltVoiceConfig": {
-                                "voiceName": "Aoede" # Voz clara y neutral
+                                "voiceName": "Aoede"
                             }
                         }
                     }
@@ -54,11 +56,10 @@ async def websocket_endpoint(twilio_ws: WebSocket):
             }
         }
         await gemini_ws.send(json.dumps(setup_msg))
-        await gemini_ws.recv() # Confirmación de Gemini
+        await gemini_ws.recv() 
         
         stream_sid = None
 
-        # 2. Tarea: Escuchar a Twilio y traducir el audio a Gemini
         async def twilio_to_gemini():
             nonlocal stream_sid
             try:
@@ -71,12 +72,10 @@ async def websocket_endpoint(twilio_ws: WebSocket):
                         print("▶️ La persona empezó a hablar.")
                         
                     elif data['event'] == 'media':
-                        # Extraer audio telefónico y convertir a 16kHz
                         audio_data = base64.b64decode(data['media']['payload'])
                         pcm_data = audioop.ulaw2lin(audio_data, 2)
                         pcm_16khz, _ = audioop.ratecv(pcm_data, 2, 1, 8000, 16000, None)
                         
-                        # Enviar audio a Gemini
                         gemini_msg = {
                             "realtimeInput": {
                                 "mediaChunks": [{
@@ -93,7 +92,6 @@ async def websocket_endpoint(twilio_ws: WebSocket):
             except Exception as e:
                 print(f"Fin de audio Twilio: {e}")
 
-        # 3. Tarea: Escuchar a Gemini y traducir el audio al Teléfono (Twilio)
         async def gemini_to_twilio():
             try:
                 while True:
@@ -105,13 +103,11 @@ async def websocket_endpoint(twilio_ws: WebSocket):
                         if model_turn:
                             for part in model_turn["parts"]:
                                 if "inlineData" in part:
-                                    # Extraer audio de Gemini y convertir a calidad telefónica (8kHz)
                                     audio_b64 = part["inlineData"]["data"]
                                     pcm_audio = base64.b64decode(audio_b64)
                                     pcm_8khz, _ = audioop.ratecv(pcm_audio, 2, 1, 24000, 8000, None)
                                     mulaw_audio = audioop.lin2ulaw(pcm_8khz, 2)
                                     
-                                    # Enviar por el auricular del teléfono
                                     if stream_sid:
                                         twilio_msg = {
                                             "event": "media",
@@ -126,3 +122,7 @@ async def websocket_endpoint(twilio_ws: WebSocket):
 
         # Ejecutar ambos canales de audio simultáneamente
         await asyncio.gather(twilio_to_gemini(), gemini_to_twilio())
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
