@@ -16,9 +16,8 @@ async def inicio():
 @app.get("/llamada")
 async def contestar_llamada(request: Request):
     host = request.url.hostname
-    # Generamos el XML (TwiML) que Twilio necesita
-    twiml = f"""
-    
+    twiml = f'Conectando con inteligencia artificial.'
+    return Response(content=twiml, media_type="application/xml")
         Conectando con inteligencia artificial.
         
             
