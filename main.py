@@ -16,13 +16,7 @@ async def inicio():
 @app.get("/llamada")
 async def contestar_llamada(request: Request):
     host = request.url.hostname
-    twiml = f'Conectando con inteligencia artificial.'
-    return Response(content=twiml, media_type="application/xml")
-        Conectando con inteligencia artificial.
-        
-            
-        
-    """
+    twiml = f'<?xml version="1.0" encoding="UTF-8"?><Response><Say language="es-MX">Conectando con inteligencia artificial.</Say><Connect><Stream url="wss://{host}/ws" /></Connect></Response>'
     return Response(content=twiml, media_type="application/xml")
 
 # 3. El túnel de WebSockets para el audio en tiempo real
