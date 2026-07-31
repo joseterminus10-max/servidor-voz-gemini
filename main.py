@@ -44,7 +44,7 @@ async def websocket_endpoint(twilio_ws: WebSocket):
 
             setup_msg = {
                 "setup": {
-                    "model": "model": "models/gemini-2.0-flash-realtime-exp",
+                    "model": "models/gemini-2.0-flash-realtime-exp",
                     "systemInstruction": {
                         "parts": [{"text": "Eres un asistente telefónico amable. Responde siempre en español, de forma muy concisa, como en una charla telefónica."}]
                     },
