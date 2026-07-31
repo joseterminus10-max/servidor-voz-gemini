@@ -10,7 +10,6 @@ import uvicorn
 
 app = FastAPI()
 
-# Leemos tu llave secreta de Google desde la caja fuerte de Render
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_WS_URL = f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={GEMINI_API_KEY}"
 
@@ -18,30 +17,33 @@ GEMINI_WS_URL = f"wss://generativelanguage.googleapis.com/ws/google.ai.generativ
 async def inicio():
     return HTMLResponse("🚀 Servidor de Voz Activo (Twilio + Gemini)")
 
-# 2. La "recepcionista" con URL fija y XML simplificado
-@app.post("/llamada")
-@app.get("/llamada")
+# 2. Recepcionista con blindaje contra espacios en blanco
+@app.api_route("/llamada", methods=["GET", "POST"])
 async def contestar_llamada():
-    # Iniciamos directo con  para evitar errores en navegadores
-    twiml = 'Conectando con inteligencia artificial.'
-    return Response(content=twiml, media_type="text/xml")
+    twiml = """
 
-# 3. El túnel de WebSockets para el audio
+    Conectando con inteligencia artificial.
+    
+        
+    
+"""
+    # .strip() elimina cualquier caracter invisible que rompa la llamada
+    return Response(content=twiml.strip(), media_type="application/xml")
+
+# 3. El túnel de WebSockets
 @app.websocket("/ws")
 async def websocket_endpoint(twilio_ws: WebSocket):
     await twilio_ws.accept()
     print("✅ Conexión con Twilio establecida.")
 
-    # Conectamos con el cerebro de Gemini Multimodal Live
     async with websockets.connect(GEMINI_WS_URL) as gemini_ws:
         print("🧠 Conectado a Gemini.")
         
-        # Configuración de personalidad y voz
         setup_msg = {
             "setup": {
                 "model": "models/gemini-2.0-flash-exp",
                 "systemInstruction": {
-                    "parts": [{"text": "Eres un asistente telefónico amable. Responde siempre en español, de forma muy concisa, como en una charla telefónica real."}]
+                    "parts": [{"text": "Eres un asistente telefónico amable. Responde siempre en español, de forma muy concisa, como en una charla telefónica."}]
                 },
                 "generationConfig": {
                     "responseModalities": ["AUDIO"],
@@ -87,10 +89,10 @@ async def websocket_endpoint(twilio_ws: WebSocket):
                         await gemini_ws.send(json.dumps(gemini_msg))
                         
                     elif data['event'] == 'stop':
-                        print("🛑 El usuario colgó la llamada.")
+                        print("🛑 El usuario colgó.")
                         break
             except Exception as e:
-                print(f"Fin de audio Twilio: {e}")
+                print(f"Fin audio Twilio: {e}")
 
         async def gemini_to_twilio():
             try:
@@ -118,9 +120,8 @@ async def websocket_endpoint(twilio_ws: WebSocket):
                                         }
                                         await twilio_ws.send_text(json.dumps(twilio_msg))
             except Exception as e:
-                print(f"Fin de respuesta Gemini: {e}")
+                print(f"Fin respuesta Gemini: {e}")
 
-        # Ejecutar ambos canales de audio simultáneamente
         await asyncio.gather(twilio_to_gemini(), gemini_to_twilio())
 
 if __name__ == "__main__":
