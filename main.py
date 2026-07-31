@@ -87,10 +87,10 @@ async def websocket_endpoint(twilio_ws: WebSocket):
 
                             gemini_msg = {
                                 "realtimeInput": {
-                                    "mediaChunks": [{
+                                    "audio": {
                                         "mimeType": "audio/pcm;rate=16000",
                                         "data": base64.b64encode(pcm_16khz).decode("utf-8")
-                                    }]
+                                    }
                                 }
                             }
                             await gemini_ws.send(json.dumps(gemini_msg))
