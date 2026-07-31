@@ -12,7 +12,8 @@ app = FastAPI()
 
 # 1. Configuración de Gemini
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_WS_URL = f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={GEMINI_API_KEY}"
+# Nota: el endpoint pasó de v1alpha a v1beta como versión por defecto de la Live API.
+GEMINI_WS_URL = f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key={GEMINI_API_KEY}"
 
 @app.get("/")
 async def inicio():
@@ -44,7 +45,9 @@ async def websocket_endpoint(twilio_ws: WebSocket):
 
             setup_msg = {
                 "setup": {
-                    "model": "models/gemini-2.0-flash-realtime-exp",
+                    # Modelo actual de Live API (el anterior, gemini-2.0-flash-realtime-exp,
+                    # ya no existe — Google retiró la familia 2.0 Flash a inicios de 2026).
+                    "model": "models/gemini-3.1-flash-live-preview",
                     "systemInstruction": {
                         "parts": [{"text": "Eres un asistente telefónico amable. Responde siempre en español, de forma muy concisa, como en una charla telefónica."}]
                     },
