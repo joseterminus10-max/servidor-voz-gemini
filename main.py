@@ -17,18 +17,21 @@ GEMINI_WS_URL = f"wss://generativelanguage.googleapis.com/ws/google.ai.generativ
 async def inicio():
     return HTMLResponse("🚀 Servidor de Voz Activo (Twilio + Gemini)")
 
-# 2. Recepcionista con blindaje contra espacios en blanco
+# 2. Recepcionista: genera el TwiML que le dice a Twilio a dónde mandar el audio.
+# IMPORTANTE: construimos el string con etiquetas explícitas para evitar que se
+# pierdan los símbolos "<" y ">" al copiar/pegar entre editores.
 @app.api_route("/llamada", methods=["GET", "POST"])
-async def contestar_llamada():
-    twiml = """
-
-    Conectando con inteligencia artificial.
-    
-        
-    
-"""
-    # .strip() elimina cualquier caracter invisible que rompa la llamada
-    return Response(content=twiml.strip(), media_type="application/xml")
+async def contestar_llamada(request: Request):
+    host = request.url.hostname
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Response>'
+        '<Connect>'
+        f'<Stream url="wss://{host}/ws" />'
+        '</Connect>'
+        '</Response>'
+    )
+    return Response(content=twiml, media_type="application/xml")
 
 # 3. El túnel de WebSockets
 @app.websocket("/ws")
@@ -38,7 +41,7 @@ async def websocket_endpoint(twilio_ws: WebSocket):
 
     async with websockets.connect(GEMINI_WS_URL) as gemini_ws:
         print("🧠 Conectado a Gemini.")
-        
+
         setup_msg = {
             "setup": {
                 "model": "models/gemini-2.0-flash-exp",
@@ -58,8 +61,8 @@ async def websocket_endpoint(twilio_ws: WebSocket):
             }
         }
         await gemini_ws.send(json.dumps(setup_msg))
-        await gemini_ws.recv() 
-        
+        await gemini_ws.recv()
+
         stream_sid = None
 
         async def twilio_to_gemini():
@@ -68,16 +71,16 @@ async def websocket_endpoint(twilio_ws: WebSocket):
                 while True:
                     msg = await twilio_ws.receive_text()
                     data = json.loads(msg)
-                    
+
                     if data['event'] == 'start':
                         stream_sid = data['start']['streamSid']
                         print("▶️ La persona empezó a hablar.")
-                        
+
                     elif data['event'] == 'media':
                         audio_data = base64.b64decode(data['media']['payload'])
                         pcm_data = audioop.ulaw2lin(audio_data, 2)
                         pcm_16khz, _ = audioop.ratecv(pcm_data, 2, 1, 8000, 16000, None)
-                        
+
                         gemini_msg = {
                             "realtimeInput": {
                                 "mediaChunks": [{
@@ -87,7 +90,7 @@ async def websocket_endpoint(twilio_ws: WebSocket):
                             }
                         }
                         await gemini_ws.send(json.dumps(gemini_msg))
-                        
+
                     elif data['event'] == 'stop':
                         print("🛑 El usuario colgó.")
                         break
@@ -99,7 +102,7 @@ async def websocket_endpoint(twilio_ws: WebSocket):
                 while True:
                     msg = await gemini_ws.recv()
                     response = json.loads(msg)
-                    
+
                     if "serverContent" in response:
                         model_turn = response["serverContent"].get("modelTurn")
                         if model_turn:
@@ -109,7 +112,7 @@ async def websocket_endpoint(twilio_ws: WebSocket):
                                     pcm_audio = base64.b64decode(audio_b64)
                                     pcm_8khz, _ = audioop.ratecv(pcm_audio, 2, 1, 24000, 8000, None)
                                     mulaw_audio = audioop.lin2ulaw(pcm_8khz, 2)
-                                    
+
                                     if stream_sid:
                                         twilio_msg = {
                                             "event": "media",
